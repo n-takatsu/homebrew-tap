@@ -108,3 +108,12 @@ jobs:
           brew audit --formula ci/local/mcp-rs
           test -x "$(brew --prefix)/opt/mcp-rs/bin/mcp-rs"
           mcp-rs --version
+
+      # 利用者と同じ手順（tapから入れる）で入れられること
+      - name: Install from the tap as users do
+        if: github.event_name != 'pull_request'
+        run: |
+          brew uninstall ci/local/mcp-rs
+          brew install n-takatsu/tap/mcp-rs
+          brew test n-takatsu/tap/mcp-rs
+          mcp-rs --version
