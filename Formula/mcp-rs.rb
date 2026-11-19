@@ -12,8 +12,8 @@ class McpRs < Formula
     depends_on arch: :arm64
 
     on_arm do
-      url "https://github.com/n-takatsu/mcp-rs/releases/download/v0.28.0/mcp-rs-v0.28.0-aarch64-apple-darwin.tar.gz"
-      sha256 "a93fea2bcd73d7851329b2403b9ece577c7160bf88ceb0284fe3b6970ea03bb1"
+      url "https://github.com/n-takatsu/mcp-rs/releases/download/v0.29.0/mcp-rs-v0.29.0-aarch64-apple-darwin.tar.gz"
+      sha256 "d4f9d2b7f2ef27b86bdc01548cef89b94aff9a812db92a48ac8904347e2458f8"
     end
   end
 
@@ -22,8 +22,8 @@ class McpRs < Formula
     depends_on arch: :x86_64
 
     on_intel do
-      url "https://github.com/n-takatsu/mcp-rs/releases/download/v0.28.0/mcp-rs-v0.28.0-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "98e43ac463edccbf176e380a7c6886614fad9b5f576c8c256968d4f45569ab94"
+      url "https://github.com/n-takatsu/mcp-rs/releases/download/v0.29.0/mcp-rs-v0.29.0-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "1b58a9dcd34075cb2b665c4dc6f12da4025df7abf2ce9a56afb31249fa8b7bb6"
     end
   end
 
