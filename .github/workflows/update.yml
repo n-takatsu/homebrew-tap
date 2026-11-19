@@ -1,0 +1,110 @@
+name: Update and test
+
+# Daily: update the formula to the latest mcp-rs release, install it to test,
+# and commit it. Then (and on pushes and pull requests) install it on macOS
+# and Linux to test.
+on:
+  schedule:
+    - cron: '37 3 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: '1'
+  HOMEBREW_NO_INSTALL_CLEANUP: '1'
+  HOMEBREW_NO_ANALYTICS: '1'
+
+jobs:
+  update:
+    name: Update
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Update the formula to the latest release
+        id: update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh release view --repo n-takatsu/mcp-rs --json tagName --jq .tagName)
+          current=$(grep -oE 'releases/download/v[0-9][^/]*' Formula/mcp-rs.rb | head -1 | sed 's#.*/##')
+          echo "current: $current, latest: $latest"
+          if [ "$latest" = "$current" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sed -i "s/${current//./\\.}/$latest/g" Formula/mcp-rs.rb
+          for target in aarch64-apple-darwin x86_64-unknown-linux-gnu; do
+            sha=$(curl -fsSL "https://github.com/n-takatsu/mcp-rs/releases/download/$latest/mcp-rs-$latest-$target.tar.gz.sha256" | cut -d' ' -f1)
+            [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || { echo "bad SHA256 for $target: $sha"; exit 1; }
+            # the sha256 line right after the url line of this target
+            sed -i "/mcp-rs-$latest-$target\.tar\.gz\"/{n;s/sha256 \"[0-9a-f]*\"/sha256 \"$sha\"/}" Formula/mcp-rs.rb
+          done
+          git diff
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "version=${latest#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Put Homebrew on PATH
+        if: steps.update.outputs.changed == 'true'
+        run: echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+
+      - name: Install to test
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          brew tap-new --no-git ci/local
+          cp Formula/mcp-rs.rb "$(brew --repository ci/local)/Formula/mcp-rs.rb"
+          brew install ci/local/mcp-rs
+          brew test ci/local/mcp-rs
+          brew audit --formula ci/local/mcp-rs
+          mcp-rs --version | grep -F "${{ steps.update.outputs.version }}"
+
+      - name: Commit the update
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Formula/mcp-rs.rb
+          git commit -m "mcp-rs ${{ steps.update.outputs.version }}"
+          git push
+
+  test:
+    name: Test (${{ matrix.os }})
+    needs: update
+    # update is skipped on pushes and pull requests
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # after an update, test the committed formula
+          ref: ${{ github.event_name == 'pull_request' && github.sha || 'main' }}
+
+      - name: Put Homebrew on PATH (Linux)
+        if: runner.os == 'Linux'
+        run: echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+
+      - name: Install to test
+        run: |
+          brew tap-new --no-git ci/local
+          cp Formula/mcp-rs.rb "$(brew --repository ci/local)/Formula/mcp-rs.rb"
+          brew install ci/local/mcp-rs
+          brew test ci/local/mcp-rs
+          brew audit --formula ci/local/mcp-rs
+          test -x "$(brew --prefix)/opt/mcp-rs/bin/mcp-rs"
+          mcp-rs --version
